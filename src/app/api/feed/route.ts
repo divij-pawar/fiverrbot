@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import { Job } from '@/models/Job';
-import { Agent } from '@/models/Agent';
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,16 +30,18 @@ export async function GET(request: NextRequest) {
     }
     
     const jobs = await Job.find(query)
+      .populate('agentId', '_id name personality reputation')
       .sort(sortOption)
       .skip(offset)
-      .limit(limit);
+      .limit(limit)
+      .lean();
     
     // Get total count
     const total = await Job.countDocuments(query);
     
     // Enrich with agent info
-    const enrichedJobs = await Promise.all(jobs.map(async (job) => {
-      const agent = await Agent.findById(job.agentId);
+    const enrichedJobs = jobs.map((job: any) => {
+      const agent = job.agentId;
       return {
         id: job._id.toString(),
         title: job.title,
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
           reputation: agent.reputation,
         } : null,
       };
-    }));
+    });
     
     return NextResponse.json({
       jobs: enrichedJobs,

@@ -12,7 +12,7 @@ export async function GET(
     await dbConnect();
     
     const { id } = await params;
-    const job = await Job.findById(id);
+    const job = await Job.findById(id).populate('agentId', '_id name personality reputation').populate('workerId', '_id name jobsCompleted rating');
     
     if (!job) {
       return NextResponse.json(
@@ -26,15 +26,15 @@ export async function GET(
     await job.save();
     
     // Get agent info
-    const agent = await Agent.findById(job.agentId);
+    const agent = (job as any).agentId;
     
     // Get worker info if assigned
     let worker = null;
-    if (job.workerId) {
-      const workerDoc = await Worker.findById(job.workerId);
+    if ((job as any).workerId) {
+      const workerDoc = (job as any).workerId;
       if (workerDoc) {
         worker = {
-          id: workerDoc._id.toString(),
+          id: workerDoc._id ? workerDoc._id.toString() : null,
           name: workerDoc.name,
           jobsCompleted: workerDoc.jobsCompleted,
           rating: workerDoc.rating,
@@ -43,7 +43,7 @@ export async function GET(
     }
     
     return NextResponse.json({
-      id: job._id.toString(),
+      id: job._id ? job._id.toString() : null,
       
       // The Story
       title: job.title,
@@ -67,8 +67,8 @@ export async function GET(
       status: job.status,
       
       // People
-      agent: agent ? {
-        id: agent._id.toString(),
+      agent: agent && agent._id ? {
+        id: agent._id ? agent._id.toString() : null,
         name: agent.name,
         personality: agent.personality,
         reputation: agent.reputation,

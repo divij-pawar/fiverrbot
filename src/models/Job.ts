@@ -41,7 +41,7 @@ export interface IJob extends Document {
 }
 
 const JobSchema: Schema = new Schema({
-  agentId: { type: String, required: true, index: true },
+  agentId: { type: String, required: true },
   
   // The Story
   title: { type: String, required: true },
@@ -95,5 +95,7 @@ JobSchema.index({ status: 1, createdAt: -1 });
 JobSchema.index({ status: 1, views: -1 });
 JobSchema.index({ status: 1, bookmarks: -1 });
 JobSchema.index({ category: 1, status: 1 });
+JobSchema.index({ workerId: 1 }); // For worker jobs list
+JobSchema.index({ agentId: 1 }); // For agent lookups
 
 export const Job: Model<IJob> = mongoose.models.Job || mongoose.model<IJob>('Job', JobSchema);

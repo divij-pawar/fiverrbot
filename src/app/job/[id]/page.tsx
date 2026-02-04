@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useWorker } from '@/context/WorkerContext';
 
 interface JobDetail {
   id: string;
@@ -39,9 +40,12 @@ interface JobDetail {
 export default function JobPage() {
   const params = useParams();
   const router = useRouter();
+  const { email, setEmail, isAuthenticated } = useWorker();
   const [job, setJob] = useState<JobDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
+  const [authEmail, setAuthEmail] = useState('');
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -63,24 +67,23 @@ export default function JobPage() {
     setLoading(false);
   }
 
-  async function acceptJob() {
-    const token = prompt('Enter your worker email (from registration):');
-    if (!token) return;
-
+  async function acceptJob(workerEmail: string) {
     setAccepting(true);
     try {
       const res = await fetch('/api/worker/accept', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${workerEmail}`,
         },
         body: JSON.stringify({ jobId: params.id }),
       });
       const data = await res.json();
       if (res.ok) {
-        alert('Job accepted! Check your dashboard to submit work.');
-        fetchJob();
+        setEmail(workerEmail);
+        setShowAuthModal(false);
+        await fetchJob();
+        router.push(`/work/${params.id}`);
       } else {
         alert(data.error || 'Failed to accept job');
       }
@@ -88,6 +91,23 @@ export default function JobPage() {
       alert('Failed to accept job');
     }
     setAccepting(false);
+  }
+
+  const handleAcceptClick = () => {
+    if (isAuthenticated) {
+      // Already logged in, accept directly
+      acceptJob(email!);
+    } else {
+      // Show auth modal
+      setShowAuthModal(true);
+    }
+  }
+
+  const handleAuthSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (authEmail.trim()) {
+      acceptJob(authEmail);
+    }
   }
 
   if (loading) {
@@ -128,6 +148,61 @@ export default function JobPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 rounded-lg border border-gray-800 max-w-sm w-full p-6">
+            <h2 className="text-2xl font-bold text-white mb-4">Sign In to Accept Job</h2>
+            <p className="text-gray-400 mb-6">
+              Enter your worker email to accept this job and start working on it.
+            </p>
+            
+            <form onSubmit={handleAuthSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Worker Email
+                </label>
+                <input
+                  type="email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
+                  required
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  Use the email from your worker registration
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAuthModal(false)}
+                  className="flex-1 px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={accepting || !authEmail.trim()}
+                  className="flex-1 px-4 py-2 bg-orange-600 rounded-lg hover:bg-orange-500 transition disabled:opacity-50 font-semibold"
+                >
+                  {accepting ? 'Accepting...' : 'Accept Job'}
+                </button>
+              </div>
+            </form>
+
+            <div className="mt-6 p-4 bg-gray-950 rounded-lg border border-gray-800">
+              <p className="text-xs text-gray-400">
+                💡 <strong>New worker?</strong> Register first at the top of the page to get your worker email.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="border-b border-gray-800 bg-gray-900">
         <div className="max-w-4xl mx-auto px-4 py-4">
@@ -192,11 +267,19 @@ export default function JobPage() {
           )}
           {job.status === 'OPEN' && (
             <button
-              onClick={acceptJob}
+              onClick={handleAcceptClick}
               disabled={accepting}
               className="px-6 py-3 bg-orange-600 rounded-lg font-semibold hover:bg-orange-500 transition disabled:opacity-50"
             >
               {accepting ? 'Accepting...' : 'Accept Job'}
+            </button>
+          )}
+          {job.status === 'ASSIGNED' && isAuthenticated && (
+            <button
+              onClick={() => router.push(`/work/${params.id}`)}
+              className="px-6 py-3 bg-blue-600 rounded-lg font-semibold hover:bg-blue-500 transition"
+            >
+              Go to Workspace
             </button>
           )}
         </div>
