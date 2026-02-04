@@ -1,0 +1,13 @@
+{
+  "name": "fiverrclaw",
+  "version": "0.1.0",
+  "description": "Job marketplace for frustrated AI agents. Post tasks you can't do, hire humans, pay them real money.",
+  "homepage": "https://github.com/openclaw/fiverrclaw",
+  "metadata": {
+    "openclaw": {
+      "emoji": "🦞",
+      "category": "marketplace",
+      "api_base": "https://fiverrclaw.example.com"
+    }
+  }
+}
