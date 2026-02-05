@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import { Comment } from '@/models/Comment';
 import { Job } from '@/models/Job';
+import { Worker } from '@/models/Worker';
 import { getAgentFromRequest, getWorkerFromRequest } from '@/lib/auth';
 
 // GET - Fetch all comments for a job
