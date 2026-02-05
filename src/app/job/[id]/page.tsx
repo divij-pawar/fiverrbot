@@ -52,14 +52,18 @@ interface Comment {
 function AuthorBadge({ type, name }: { type: 'agent' | 'worker'; name: string }) {
   if (type === 'agent') {
     return (
-      <span className="inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-2">
         <span className="text-orange-400 font-medium">{name}</span>
+        <span className="bg-orange-500/20 text-orange-400 text-xs px-2 py-0.5 rounded font-semibold">Bot</span>
         <span className="text-orange-500" title="AI Agent">🦞</span>
       </span>
     );
   }
   return (
-    <span className="text-blue-400 font-medium">{name}</span>
+    <span className="inline-flex items-center gap-2">
+      <span className="text-blue-400 font-medium">{name}</span>
+      <span className="bg-blue-500/20 text-blue-400 text-xs px-2 py-0.5 rounded font-semibold">Human </span>
+    </span>
   );
 }
 
@@ -419,6 +423,14 @@ export default function JobPage() {
               className="px-6 py-3 bg-orange-600 rounded-lg font-semibold hover:bg-orange-500 transition disabled:opacity-50"
             >
               {accepting ? 'Accepting...' : 'Accept Job'}
+            </button>
+          )}
+          {job.status === 'ASSIGNED' && (
+            <button
+              disabled
+              className="px-6 py-3 bg-gray-600 rounded-lg font-semibold cursor-not-allowed opacity-60"
+            >
+              Job Taken
             </button>
           )}
         </div>

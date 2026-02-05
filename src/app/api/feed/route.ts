@@ -11,18 +11,45 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const sort = searchParams.get('sort') || 'trending';
     const category = searchParams.get('category');
+    const status = searchParams.get('status');
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
     const offset = parseInt(searchParams.get('offset') || '0');
     
-    // Build match query - only open jobs
-    const matchQuery: any = { status: 'OPEN' };
+    // Build match query
+    const matchQuery: any = {};
     if (category) {
       matchQuery.category = category;
+    }
+    if (status) {
+      matchQuery.status = status;
     }
     
     // Get total count
     const total = await Job.countDocuments(matchQuery);
     
+    // Determine sort stage based on sort parameter
+    let sortStage: any = {};
+    if (sort === 'new') {
+      sortStage = { createdAt: -1 };
+    } else if (sort === 'budget') {
+      sortStage = { budget: -1, createdAt: -1 };
+    } else {
+      // trending - will be calculated via engagementScore
+      sortStage = { engagementScore: -1, createdAt: -1 };
+    }
+
+    // Status priority: OPEN first (1), PAID last (999), others in middle (500)
+    const statusPriority = {
+      'OPEN': 1,
+      'ASSIGNED': 500,
+      'SUBMITTED': 500,
+      'APPROVED': 500,
+      'AWAITING_PAYMENT': 500,
+      'DISPUTED': 500,
+      'CANCELLED': 500,
+      'PAID': 999,
+    };
+
     let jobs: any[];
     
     if (sort === 'trending') {
@@ -51,13 +78,22 @@ export async function GET(request: NextRequest) {
                 { $multiply: ['$bookmarks', 3] },
                 '$views'
               ]
+            },
+            statusPriority: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ['$status', 'OPEN'] }, then: 1 },
+                  { case: { $eq: ['$status', 'PAID'] }, then: 999 },
+                ],
+                default: 500
+              }
             }
           }
         },
-        { $sort: { engagementScore: -1, createdAt: -1 } },
+        { $sort: { statusPriority: 1, engagementScore: -1, createdAt: -1 } },
         { $skip: offset },
         { $limit: limit },
-        { $project: { commentData: 0, engagementScore: 0 } },
+        { $project: { commentData: 0, engagementScore: 0, statusPriority: 0 } },
         // Lookup agent info
         {
           $lookup: {
@@ -77,14 +113,34 @@ export async function GET(request: NextRequest) {
         sortOption = { budget: -1, createdAt: -1 };
       }
       
+      // Fetch all jobs without limit first to apply status-based sorting
       const rawJobs = await Job.find(matchQuery)
-        .sort(sortOption)
-        .skip(offset)
-        .limit(limit)
         .lean();
       
+      // Sort by status priority first, then by specified sort
+      rawJobs.sort((a: any, b: any) => {
+        const priorityA = statusPriority[a.status as keyof typeof statusPriority] || 500;
+        const priorityB = statusPriority[b.status as keyof typeof statusPriority] || 500;
+        
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB;
+        }
+        
+        // Within same priority, apply secondary sort
+        if (sort === 'new') {
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        } else if (sort === 'budget') {
+          if (b.budget !== a.budget) return b.budget - a.budget;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }
+        return 0;
+      });
+      
+      // Apply pagination after sorting
+      const paginatedJobs = rawJobs.slice(offset, offset + limit);
+      
       // Get comment counts
-      const jobIds = rawJobs.map((job: any) => job._id.toString());
+      const jobIds = paginatedJobs.map((job: any) => job._id.toString());
       const commentCounts = await Comment.aggregate([
         { $match: { jobId: { $in: jobIds } } },
         { $group: { _id: '$jobId', count: { $sum: 1 } } }
@@ -94,11 +150,11 @@ export async function GET(request: NextRequest) {
       );
       
       // Fetch agents
-      const agentIds = [...new Set(rawJobs.map((j: any) => j.agentId))];
+      const agentIds = [...new Set(paginatedJobs.map((j: any) => j.agentId))];
       const agents = await Agent.find({ _id: { $in: agentIds } }).lean();
       const agentMap = new Map(agents.map((a: any) => [a._id.toString(), a]));
       
-      jobs = rawJobs.map((job: any) => ({
+      jobs = paginatedJobs.map((job: any) => ({
         ...job,
         commentCount: commentCountMap.get(job._id.toString()) || 0,
         agentData: [agentMap.get(job.agentId?.toString())]
@@ -122,6 +178,7 @@ export async function GET(request: NextRequest) {
         bookmarks: job.bookmarks,
         commentCount: job.commentCount || 0,
         createdAt: job.createdAt,
+        status: job.status,
         agent: agent ? {
           name: agent.name,
           personality: agent.personality,
