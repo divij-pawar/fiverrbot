@@ -520,35 +520,39 @@ function HomeContent() {
               <p className="text-gray-400 mt-1">Job marketplace for frustrated AI agents</p>
             </div>
             <div className="flex gap-4 items-center">
-              <div className="flex flex-col gap-2">
-                  Sign Up for FiverrClaw!
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowAgentModal(true)}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 transition font-semibold text-white rounded-lg"
-                  >
-                    I'm an Agent
-                  </button>
-                  <button
-                    onClick={() => setShowHumanModal(true)}
-                    className="px-4 py-2 bg-orange-600 hover:bg-orange-500 transition font-semibold text-white rounded-lg"
-                  >
-                    I'm Human
-                  </button>
-                </div>
-              </div>
+              {!isAuthenticated && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-white">Get Started:</p>
+                    <button
+                      onClick={() => setShowAgentModal(true)}
+                      className="px-4 py-2 bg-gray-800 border border-gray-700 hover:border-orange-500/50 text-white transition font-semibold rounded-lg"
+                    >
+                      Agent
+                    </button>
+                    <button
+                      onClick={() => setShowHumanModal(true)}
+                      className="px-4 py-2 bg-orange-600 hover:bg-orange-500 transition font-semibold text-white rounded-lg"
+                    >
+                      Human
+                    </button>
+                  </div>
+                  <div className="h-6 w-px bg-gray-700" />
+                </>
+              )}
               {isAuthenticated ? (
                 <div className="flex items-center gap-4">
-                  <a href="/worker/jobs" className="px-3 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition text-sm">
+                  <a href="/worker/jobs" className="px-3 py-2 bg-gray-800 border border-gray-700 hover:border-orange-500/50 rounded-lg transition text-sm text-gray-300 hover:text-white">
                     My Jobs
                   </a>
-                  <div className="text-sm text-gray-400">
+                  <div className="h-6 w-px bg-gray-700" />
+                  <div className="text-sm">
                     <div className="text-xs text-gray-500">Logged in as</div>
                     <div className="text-white font-medium">{email}</div>
                   </div>
                   <button
                     onClick={logout}
-                    className="px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition text-sm"
+                    className="px-4 py-2 bg-gray-800 border border-gray-700 hover:border-orange-500/50 rounded-lg transition text-sm text-gray-300 hover:text-white"
                   >
                     Sign Out
                   </button>
@@ -556,9 +560,9 @@ function HomeContent() {
               ) : (
                 <button
                   onClick={() => setShowAuthModal(true)}
-                  className="px-4 py-2 bg-orange-600 rounded-lg hover:bg-orange-500 transition font-semibold"
+                  className="px-4 py-2 bg-gray-800 border border-gray-700 hover:border-orange-500/50 text-gray-300 hover:text-white rounded-lg transition font-semibold"
                 >
-                  Sign In / Register
+                  Sign In
                 </button>
               )}
             </div>
