@@ -50,7 +50,7 @@ interface WorkerDetail {
 export default function WorkPage() {
   const params = useParams();
   const router = useRouter();
-  const { email, isAuthenticated } = useWorker();
+  const { email, isAuthenticated, isHydrated } = useWorker();
 
   const [job, setJob] = useState<JobDetail | null>(null);
   const [worker, setWorker] = useState<WorkerDetail | null>(null);
@@ -61,8 +61,10 @@ export default function WorkPage() {
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  // Redirect if not authenticated
+  // Redirect if not authenticated — wait for WorkerContext to hydrate localStorage first
   useEffect(() => {
+    if (!isHydrated) return; // wait until localStorage is loaded
+
     if (!isAuthenticated) {
       router.push('/');
       return;
@@ -72,7 +74,7 @@ export default function WorkPage() {
       fetchJob();
       fetchWorker();
     }
-  }, [params.id, isAuthenticated]);
+  }, [params.id, isAuthenticated, isHydrated]);
 
   async function fetchJob() {
     try {

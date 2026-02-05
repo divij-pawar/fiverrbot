@@ -32,12 +32,14 @@ function HomeContent() {
   const [category, setCategory] = useState('');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [registerData, setRegisterData] = useState({
     name: '',
     email: '',
     bio: '',
     skills: '',
+    password: '',
     paymentMethod: '',
     paymentHandle: '',
   });
@@ -67,17 +69,38 @@ function HomeContent() {
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (authEmail.trim()) {
-      setEmail(authEmail);
-      setShowAuthModal(false);
-      setAuthEmail('');
-    }
+    setAuthError('');
+    setAuthLoading(true);
+    fetch('/api/worker/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: authEmail, password: authPassword }),
+    })
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (r.ok) {
+          setEmail(authEmail);
+          setShowAuthModal(false);
+          setAuthEmail('');
+          setAuthPassword('');
+        } else {
+          setAuthError(data.error || 'Login failed');
+        }
+      })
+      .catch(() => setAuthError('Network error'))
+      .finally(() => setAuthLoading(false));
   };
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
     setAuthLoading(true);
+
+    if (!registerData.password || registerData.password.length < 8) {
+      setAuthError('Password must be at least 8 characters');
+      setAuthLoading(false);
+      return;
+    }
 
     const paymentMethods: Record<string, string> = {};
     if (registerData.paymentMethod && registerData.paymentHandle) {
@@ -93,6 +116,7 @@ function HomeContent() {
         body: JSON.stringify({
           name: registerData.name,
           email: registerData.email,
+          password: registerData.password,
           bio: registerData.bio,
           skills: registerData.skills.split(',').map(s => s.trim()).filter(Boolean),
           paymentMethods,
@@ -109,6 +133,7 @@ function HomeContent() {
           email: '',
           bio: '',
           skills: '',
+          password: '',
           paymentMethod: '',
           paymentHandle: '',
         });
@@ -192,6 +217,19 @@ function HomeContent() {
                     autoFocus
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="Your password"
+                    className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
+                    required
+                  />
+                </div>
 
                 <div className="flex gap-3">
                   <button
@@ -203,10 +241,10 @@ function HomeContent() {
                   </button>
                   <button
                     type="submit"
-                    disabled={!authEmail.trim()}
+                    disabled={!authEmail.trim() || !authPassword}
                     className="flex-1 px-4 py-2 bg-orange-600 rounded-lg hover:bg-orange-500 transition disabled:opacity-50 font-semibold"
                   >
-                    Sign In
+                    {authLoading ? 'Signing in...' : 'Sign In'}
                   </button>
                 </div>
               </form>
@@ -223,7 +261,7 @@ function HomeContent() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Email
+                    Email *
                   </label>
                   <input
                     type="email"
@@ -237,7 +275,21 @@ function HomeContent() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Name
+                    Password *
+                  </label>
+                  <input
+                    type="password"
+                    value={registerData.password}
+                    onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
+                    placeholder="Minimum 8 characters"
+                    className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Name *
                   </label>
                   <input
                     type="text"
@@ -250,27 +302,21 @@ function HomeContent() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Bio (Optional)
-                  </label>
                   <input
                     type="text"
                     value={registerData.bio}
                     onChange={(e) => setRegisterData({ ...registerData, bio: e.target.value })}
-                    placeholder="Brief bio or expertise"
+                    placeholder="Brief bio or expertise (Optional)"
                     className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Skills (Optional)
-                  </label>
                   <input
                     type="text"
                     value={registerData.skills}
                     onChange={(e) => setRegisterData({ ...registerData, skills: e.target.value })}
-                    placeholder="Comma-separated skills"
+                    placeholder="Comma-separated skills (Optional)"
                     className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
                   />
                 </div>

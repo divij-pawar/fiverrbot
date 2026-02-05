@@ -45,6 +45,9 @@ export default function JobPage() {
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
@@ -67,20 +70,19 @@ export default function JobPage() {
     setLoading(false);
   }
 
-  async function acceptJob(workerEmail: string) {
+  async function acceptJob(workerEmail?: string) {
     setAccepting(true);
     try {
+      const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+      if (workerEmail) headers['Authorization'] = `Bearer ${workerEmail}`;
       const res = await fetch('/api/worker/accept', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${workerEmail}`,
-        },
+        headers,
         body: JSON.stringify({ jobId: params.id }),
       });
       const data = await res.json();
       if (res.ok) {
-        setEmail(workerEmail);
+        if (workerEmail) setEmail(workerEmail);
         setShowAuthModal(false);
         await fetchJob();
         router.push(`/work/${params.id}`);
@@ -95,18 +97,46 @@ export default function JobPage() {
 
   const handleAcceptClick = () => {
     if (isAuthenticated) {
-      // Already logged in, accept directly
-      acceptJob(email!);
+      // Already logged in, accept directly (server will read cookie)
+      acceptJob();
     } else {
       // Show auth modal
+      setAuthError('');
       setShowAuthModal(true);
     }
   }
 
-  const handleAuthSubmit = (e: React.FormEvent) => {
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (authEmail.trim()) {
-      acceptJob(authEmail);
+    setAuthError('');
+    if (!authEmail.trim() || !authPassword) {
+      setAuthError('Email and password are required');
+      return;
+    }
+
+    setAuthLoading(true);
+    try {
+      const res = await fetch('/api/worker/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: authEmail, password: authPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAuthError(data.error || 'Login failed');
+        return;
+      }
+
+      // login successful — set context email and accept using cookie-based auth
+      setEmail(authEmail);
+      setShowAuthModal(false);
+      setAuthEmail('');
+      setAuthPassword('');
+      await acceptJob();
+    } catch (err) {
+      setAuthError('Network error');
+    } finally {
+      setAuthLoading(false);
     }
   }
 
@@ -154,7 +184,7 @@ export default function JobPage() {
           <div className="bg-gray-900 rounded-lg border border-gray-800 max-w-sm w-full p-6">
             <h2 className="text-2xl font-bold text-white mb-4">Sign In to Accept Job</h2>
             <p className="text-gray-400 mb-6">
-              Enter your worker email to accept this job and start working on it.
+              Enter your worker email and password to accept this job and start working on it.
             </p>
             
             <form onSubmit={handleAuthSubmit} className="space-y-4">
@@ -176,6 +206,21 @@ export default function JobPage() {
                 </p>
               </div>
 
+              <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder="Your password"
+                  className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
+                  required
+                />
+              </div>
+              </div>
               <div className="flex gap-3">
                 <button
                   type="button"
@@ -186,7 +231,7 @@ export default function JobPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={accepting || !authEmail.trim()}
+                  disabled={accepting || !authEmail.trim() || !authPassword}
                   className="flex-1 px-4 py-2 bg-orange-600 rounded-lg hover:bg-orange-500 transition disabled:opacity-50 font-semibold"
                 >
                   {accepting ? 'Accepting...' : 'Accept Job'}
@@ -196,7 +241,7 @@ export default function JobPage() {
 
             <div className="mt-6 p-4 bg-gray-950 rounded-lg border border-gray-800">
               <p className="text-xs text-gray-400">
-                💡 <strong>New worker?</strong> Register first at the top of the page to get your worker email.
+                💡 <strong>New worker?</strong> Register first on the <a href="/" className="text-orange-400 hover:text-orange-300 underline">homepage</a> to get your worker email.
               </p>
             </div>
           </div>

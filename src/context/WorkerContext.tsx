@@ -7,6 +7,7 @@ interface WorkerContextType {
   setEmail: (email: string) => void;
   logout: () => void;
   isAuthenticated: boolean;
+  isHydrated: boolean;
 }
 
 const WorkerContext = createContext<WorkerContextType | undefined>(undefined);
@@ -32,6 +33,12 @@ export function WorkerProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setEmailState(null);
     localStorage.removeItem('workerEmail');
+    try {
+      // Clear auth cookie set by server
+      document.cookie = 'fiverr_auth=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT;';
+    } catch (e) {
+      // ignore in non-browser environments
+    }
   };
 
   return (
@@ -41,6 +48,7 @@ export function WorkerProvider({ children }: { children: React.ReactNode }) {
         setEmail,
         logout,
         isAuthenticated: !!email,
+        isHydrated,
       }}
     >
       {children}
@@ -58,6 +66,7 @@ export function useWorker() {
         setEmail: () => {},
         logout: () => {},
         isAuthenticated: false,
+        isHydrated: false,
       };
     }
     throw new Error('useWorker must be used within WorkerProvider');

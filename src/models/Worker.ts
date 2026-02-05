@@ -21,7 +21,7 @@ export interface IWorker extends Document {
 
 const WorkerSchema: Schema = new Schema({
   email: { type: String, required: true, unique: true },
-  passwordHash: { type: String },
+  passwordHash: { type: String, select: false },
   name: { type: String, required: true },
   bio: { type: String },
   skills: [{ type: String }],

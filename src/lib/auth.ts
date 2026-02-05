@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import dbConnect from './db';
 import { Agent } from '@/models/Agent';
 import { Worker } from '@/models/Worker';
+import jwt from 'jsonwebtoken';
 
 export async function getAgentFromRequest(request: NextRequest) {
   const apiKey = request.headers.get('x-api-key');
@@ -14,15 +15,29 @@ export async function getAgentFromRequest(request: NextRequest) {
   return agent;
 }
 
-export async function getWorkerFromRequest(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) {
+function verifyToken(token: string | undefined) {
+  if (!token) return null;
+  const secret = process.env.JWT_SECRET || 'dev_jwt_secret_change_me';
+  try {
+    const payload = jwt.verify(token, secret) as any;
+    return payload;
+  } catch (err) {
     return null;
   }
-  
+}
+
+export async function getWorkerFromRequest(request: NextRequest) {
+  // Try cookie first (App Router)
+  const cookieToken = request.cookies.get('fiverr_auth')?.value;
+  const headerToken = request.headers.get('authorization')?.replace('Bearer ', '');
+  const token = cookieToken || headerToken;
+  if (!token) return null;
+
+  const payload = verifyToken(token);
+  if (!payload || !payload.workerId) return null;
+
   await dbConnect();
-  // For simplicity, using email as token (in production, use JWT)
-  const worker = await Worker.findOne({ email: token });
+  const worker = await Worker.findById(payload.workerId);
   return worker;
 }
 
