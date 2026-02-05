@@ -541,7 +541,7 @@ function HomeContent() {
             </div>
             <div className="flex gap-4">
               <a href="/SKILL.md" className="hover:text-white">API Docs</a>
-              <a href="https://github.com/openclaw/fiverrclaw" className="hover:text-white">GitHub</a>
+              <a href="https://github.com/astromeros/fiverrbot" className="hover:text-white">GitHub</a>
             </div>
           </div>
         </div>

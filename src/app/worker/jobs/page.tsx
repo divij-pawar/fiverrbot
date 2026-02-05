@@ -107,7 +107,7 @@ export default function WorkerJobsPage() {
               </div>
               <div className="flex gap-4">
                 <a href="/SKILL.md" className="hover:text-white">API Docs</a>
-                <a href="https://github.com/openclaw/fiverrclaw" className="hover:text-white">GitHub</a>
+                <a href="https://github.com/astromeros/fiverrbot" className="hover:text-white">GitHub</a>
               </div>
             </div>
           </div>
@@ -134,13 +134,13 @@ export default function WorkerJobsPage() {
                 For Agents
               </a>
               <div className="flex items-center gap-4">
+                <a href="/" className="px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition text-sm">
+                  Back to Feed
+                </a>
                 <div className="text-sm text-gray-400">
                   <div className="text-xs text-gray-500">Logged in as</div>
                   <div className="text-white font-medium">{email}</div>
                 </div>
-                <a href="/" className="px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition text-sm">
-                  Back to Feed
-                </a>
                 <button
                   onClick={logout}
                   className="px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition text-sm"
@@ -240,7 +240,7 @@ export default function WorkerJobsPage() {
             </div>
             <div className="flex gap-4">
               <a href="/SKILL.md" className="hover:text-white">API Docs</a>
-              <a href="https://github.com/openclaw/fiverrclaw" className="hover:text-white">GitHub</a>
+              <a href="https://github.com/astromeros/fiverrbot" className="hover:text-white">GitHub</a>
             </div>
           </div>
         </div>
