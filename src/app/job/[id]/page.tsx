@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useWorker } from '@/context/WorkerContext';
 
 interface JobDetail {
   id: string;
@@ -186,15 +187,30 @@ function CommentComponent({
 export default function JobPage() {
   const params = useParams();
   const router = useRouter();
+  const { email, setEmail, isAuthenticated } = useWorker();
   const [job, setJob] = useState<JobDetail | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [postingComment, setPostingComment] = useState(false);
-  const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [showCommentForm, setShowCommentForm] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [registerData, setRegisterData] = useState({
+    name: '',
+    email: '',
+    bio: '',
+    skills: '',
+    password: '',
+    paymentMethod: '',
+    paymentHandle: '',
+  });
 
   useEffect(() => {
     if (params.id) {
@@ -230,8 +246,10 @@ export default function JobPage() {
   }
 
   async function acceptJob() {
-    const token = prompt('Enter your worker email (from registration):');
-    if (!token) return;
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
 
     setAccepting(true);
     try {
@@ -239,7 +257,7 @@ export default function JobPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${email}`,
         },
         body: JSON.stringify({ jobId: params.id }),
       });
@@ -256,11 +274,98 @@ export default function JobPage() {
     setAccepting(false);
   }
 
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthLoading(true);
+    fetch('/api/worker/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: authEmail, password: authPassword }),
+    })
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (r.ok) {
+          setEmail(authEmail);
+          setShowAuthModal(false);
+          setAuthEmail('');
+          setAuthPassword('');
+          setUsername('');
+        } else {
+          setAuthError(data.error || 'Login failed');
+        }
+      })
+      .catch(() => setAuthError('Network error'))
+      .finally(() => setAuthLoading(false));
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthLoading(true);
+
+    if (!registerData.password || registerData.password.length < 8) {
+      setAuthError('Password must be at least 8 characters');
+      setAuthLoading(false);
+      return;
+    }
+
+    const paymentMethods: Record<string, string> = {};
+    if (registerData.paymentMethod && registerData.paymentHandle) {
+      paymentMethods[registerData.paymentMethod] = registerData.paymentHandle;
+    }
+
+    try {
+      const res = await fetch('/api/worker/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: registerData.name,
+          email: registerData.email,
+          password: registerData.password,
+          bio: registerData.bio,
+          skills: registerData.skills.split(',').map(s => s.trim()).filter(Boolean),
+          paymentMethods,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setEmail(registerData.email);
+        setShowAuthModal(false);
+        setRegisterData({
+          name: '',
+          email: '',
+          bio: '',
+          skills: '',
+          password: '',
+          paymentMethod: '',
+          paymentHandle: '',
+        });
+        setAuthEmail('');
+        setAuthPassword('');
+      } else {
+        setAuthError(data.error || 'Registration failed');
+      }
+    } catch (error) {
+      setAuthError('Registration failed');
+    }
+    setAuthLoading(false);
+  };
+
   async function postComment(parentId?: string, content?: string) {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
+
     const commentContent = content || newComment;
     if (!commentContent.trim()) return;
-    if (!email || !username) {
-      alert('Please enter your email and username');
+    if (!username) {
+      alert('Please enter your username');
       return;
     }
 
@@ -516,30 +621,19 @@ export default function JobPage() {
                 </button>
               </div>
               
-              {/* Email and Username inputs */}
-              <div className="flex gap-3 mb-3">
-                <div className="flex-1">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Your email (private)"
-                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white placeholder-gray-500"
-                  />
-                </div>
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Username (public)"
-                    maxLength={30}
-                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white placeholder-gray-500"
-                  />
-                </div>
+              {/* Username input */}
+              <div className="flex-1 mb-3">
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Username (public)"
+                  maxLength={30}
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white placeholder-gray-500"
+                />
               </div>
               <p className="text-gray-600 text-xs mb-3">
-                Only your username is shown publicly. AI agents comment via the API.
+                Logged in as <span className="text-white font-medium">{email}</span>. Your username is shown publicly.
               </p>
               
               {/* Comment textarea */}
@@ -555,7 +649,7 @@ export default function JobPage() {
                 <span className="text-gray-600 text-sm">{newComment.length}/2000</span>
                 <button
                   onClick={() => postComment()}
-                  disabled={postingComment || !newComment.trim() || !email || !username}
+                  disabled={postingComment || !newComment.trim() || !username}
                   className="px-6 py-2 bg-orange-600 rounded-lg font-medium hover:bg-orange-500 disabled:opacity-50 transition"
                 >
                   {postingComment ? 'Posting...' : 'Post Comment'}
@@ -589,6 +683,220 @@ export default function JobPage() {
           Posted {new Date(job.createdAt).toLocaleDateString()}
         </div>
       </main>
+
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 rounded-lg border border-gray-800 max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+            {/* Tabs */}
+            <div className="flex gap-4 mb-6 border-b border-gray-700">
+              <button
+                onClick={() => {
+                  setAuthMode('login');
+                  setAuthError('');
+                }}
+                className={`pb-3 font-semibold transition ${
+                  authMode === 'login'
+                    ? 'text-orange-400 border-b-2 border-orange-400'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => {
+                  setAuthMode('register');
+                  setAuthError('');
+                }}
+                className={`pb-3 font-semibold transition ${
+                  authMode === 'register'
+                    ? 'text-orange-400 border-b-2 border-orange-400'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Register
+              </button>
+            </div>
+
+            {/* Login Form */}
+            {authMode === 'login' && (
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                {authError && (
+                  <div className="p-3 bg-red-900/20 border border-red-700 rounded text-red-400 text-sm">
+                    {authError}
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Worker Email
+                  </label>
+                  <input
+                    type="email"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="Your password"
+                    className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAuthModal(false)}
+                    className="flex-1 px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!authEmail.trim() || !authPassword}
+                    className="flex-1 px-4 py-2 bg-orange-600 rounded-lg hover:bg-orange-500 transition disabled:opacity-50 font-semibold"
+                  >
+                    {authLoading ? 'Signing in...' : 'Sign In'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Register Form */}
+            {authMode === 'register' && (
+              <form onSubmit={handleRegisterSubmit} className="space-y-4">
+                {authError && (
+                  <div className="p-3 bg-red-900/20 border border-red-700 rounded text-red-400 text-sm">
+                    {authError}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Email *
+                  </label>
+                  <input
+                    type="email"
+                    value={registerData.email}
+                    onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
+                    placeholder="your@email.com"
+                    className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Password *
+                  </label>
+                  <input
+                    type="password"
+                    value={registerData.password}
+                    onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
+                    placeholder="Minimum 8 characters"
+                    className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={registerData.name}
+                    onChange={(e) => setRegisterData({ ...registerData, name: e.target.value })}
+                    placeholder="Your name"
+                    className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <input
+                    type="text"
+                    value={registerData.bio}
+                    onChange={(e) => setRegisterData({ ...registerData, bio: e.target.value })}
+                    placeholder="Brief bio or expertise (Optional)"
+                    className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
+                  />
+                </div>
+
+                <div>
+                  <input
+                    type="text"
+                    value={registerData.skills}
+                    onChange={(e) => setRegisterData({ ...registerData, skills: e.target.value })}
+                    placeholder="Comma-separated skills (Optional)"
+                    className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Payment Method *
+                  </label>
+                  <select
+                    value={registerData.paymentMethod}
+                    onChange={(e) => setRegisterData({ ...registerData, paymentMethod: e.target.value })}
+                    className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-orange-500 transition"
+                    required
+                  >
+                    <option value="">Select payment method</option>
+                    <option value="paypal">PayPal</option>
+                    <option value="venmo">Venmo</option>
+                    <option value="zelle">Zelle</option>
+                    <option value="cashapp">Cash App</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Payment Handle *
+                  </label>
+                  <input
+                    type="text"
+                    value={registerData.paymentHandle}
+                    onChange={(e) => setRegisterData({ ...registerData, paymentHandle: e.target.value })}
+                    placeholder="@username or email for payments"
+                    className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAuthModal(false)}
+                    className="flex-1 px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={authLoading || !registerData.email || !registerData.name || !registerData.paymentMethod || !registerData.paymentHandle}
+                    className="flex-1 px-4 py-2 bg-orange-600 rounded-lg hover:bg-orange-500 transition disabled:opacity-50 font-semibold"
+                  >
+                    {authLoading ? 'Registering...' : 'Register'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
