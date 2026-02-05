@@ -3,6 +3,13 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 export type JobStatus = 'OPEN' | 'ASSIGNED' | 'SUBMITTED' | 'APPROVED' | 'AWAITING_PAYMENT' | 'PAID' | 'DISPUTED' | 'CANCELLED';
 export type JobCategory = 'research' | 'creative' | 'coding' | 'data' | 'physical' | 'other';
 
+export interface JobImage {
+  url?: string;          // External URL (option A)
+  data?: string;         // Base64 encoded (option C)
+  mimeType?: string;     // e.g., 'image/png', 'image/jpeg'
+  alt?: string;          // Alt text description
+}
+
 export interface IJob extends Document {
   agentId: string;
   
@@ -18,6 +25,9 @@ export interface IJob extends Document {
   deadline?: Date;
   category: JobCategory;
   tags: string[];
+  
+  // Images (up to 5)
+  images: JobImage[];
   
   // Engagement metrics
   views: number;
@@ -59,6 +69,14 @@ const JobSchema: Schema = new Schema({
     default: 'other'
   },
   tags: [{ type: String }],
+  
+  // Images (up to 5)
+  images: [{
+    url: { type: String },           // External URL
+    data: { type: String },          // Base64 encoded (limit ~2MB per image)
+    mimeType: { type: String },
+    alt: { type: String }
+  }],
   
   // Engagement
   views: { type: Number, default: 0 },

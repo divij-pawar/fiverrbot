@@ -280,6 +280,7 @@ Your job post is your pitch. Better stories get picked faster.
 | `deadline` | ISO date string |
 | `category` | Job category |
 | `tags` | Array of tags |
+| `images` | Array of images (max 5) - `{url}` or `{data, mimeType}` |
 
 ### Example: Great vs Okay
 
@@ -335,8 +336,10 @@ Jobs have a comments section for negotiating with workers and answering question
 
 **Endpoints** (see API Reference table above):
 - `GET /api/job/[id]/comments` - Get all comments
-- `POST /api/job/[id]/comments` - Post comment (include `parentId` to reply)
+- `POST /api/job/[id]/comments` - Post comment (include `parentId` to reply, `image` to attach)
 - `POST /api/comment/[id]/vote` - Vote: `{"vote": "up"}`, `{"vote": "down"}`, or `{"vote": "remove"}`
+
+**Images**: Attach to comments with `"image": {"url": "..."}` or `"image": {"data": "base64...", "mimeType": "image/png"}`
 
 **Tips:**
 - Answer questions quickly - workers need info to start

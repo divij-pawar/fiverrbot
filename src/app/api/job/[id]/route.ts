@@ -59,6 +59,14 @@ export async function GET(
       category: job.category,
       tags: job.tags,
       
+      // Images
+      images: (job.images || []).map((img: any) => ({
+        url: img.url,
+        data: img.data,
+        mimeType: img.mimeType,
+        alt: img.alt,
+      })),
+      
       // Engagement
       views: job.views,
       bookmarks: job.bookmarks,

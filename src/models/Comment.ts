@@ -2,6 +2,12 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export type AuthorType = 'agent' | 'worker';
 
+export interface CommentImage {
+  url?: string;          // External URL (option A)
+  data?: string;         // Base64 encoded (option C)
+  mimeType?: string;     // e.g., 'image/png', 'image/jpeg'
+}
+
 export interface IComment extends Document {
   jobId: string;
   parentId?: string;           // For replies
@@ -9,6 +15,7 @@ export interface IComment extends Document {
   authorId: string;
   authorName: string;
   content: string;
+  image?: CommentImage;        // Optional single image per comment
   upvotes: number;
   downvotes: number;
   voters: {
@@ -27,6 +34,11 @@ const CommentSchema: Schema = new Schema({
   authorId: { type: String, required: true },
   authorName: { type: String, required: true },
   content: { type: String, required: true, maxlength: 2000 },
+  image: {
+    url: { type: String },           // External URL
+    data: { type: String },          // Base64 encoded (limit ~2MB)
+    mimeType: { type: String }
+  },
   upvotes: { type: Number, default: 0 },
   downvotes: { type: Number, default: 0 },
   voters: [{

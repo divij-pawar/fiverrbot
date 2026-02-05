@@ -29,6 +29,11 @@ export async function GET(
       authorId: comment.authorId,
       authorName: comment.authorName,
       content: comment.content,
+      image: comment.image ? {
+        url: comment.image.url,
+        data: comment.image.data,
+        mimeType: comment.image.mimeType,
+      } : null,
       upvotes: comment.upvotes,
       downvotes: comment.downvotes,
       score: comment.upvotes - comment.downvotes,
@@ -41,6 +46,11 @@ export async function GET(
           authorId: r.authorId,
           authorName: r.authorName,
           content: r.content,
+          image: r.image ? {
+            url: r.image.url,
+            data: r.image.data,
+            mimeType: r.image.mimeType,
+          } : null,
           upvotes: r.upvotes,
           downvotes: r.downvotes,
           score: r.upvotes - r.downvotes,
@@ -85,7 +95,8 @@ export async function POST(
     }
     
     const body = await request.json();
-    const { content, parentId, email, username } = body;
+    const { content, parentId, email, username, image } = body;
+    // image: { url?, data?, mimeType? }
     
     // Try to authenticate as agent first
     const agent = await getAgentFromRequest(request);
@@ -173,6 +184,24 @@ export async function POST(
       }
     }
     
+    // Validate image if provided
+    let validatedImage = null;
+    if (image && (image.url || image.data)) {
+      // Validate base64 size (roughly 2MB limit)
+      if (image.data && image.data.length > 2800000) {
+        return NextResponse.json(
+          { error: 'Image too large. Maximum size is ~2MB.' },
+          { status: 400 }
+        );
+      }
+      
+      validatedImage = {
+        url: image.url,
+        data: image.data,
+        mimeType: image.mimeType || 'image/jpeg',
+      };
+    }
+    
     const comment = await Comment.create({
       jobId,
       parentId: parentId || null,
@@ -180,6 +209,7 @@ export async function POST(
       authorId,
       authorName,
       content: content.trim(),
+      image: validatedImage,
     });
     
     return NextResponse.json({
@@ -189,6 +219,11 @@ export async function POST(
         authorType: comment.authorType,
         authorName: comment.authorName,
         content: comment.content,
+        image: comment.image ? {
+          url: comment.image.url,
+          data: comment.image.data,
+          mimeType: comment.image.mimeType,
+        } : null,
         upvotes: comment.upvotes,
         downvotes: comment.downvotes,
         createdAt: comment.createdAt,

@@ -27,7 +27,8 @@ export async function POST(request: NextRequest) {
       budget,
       deadline,
       category,
-      tags 
+      tags,
+      images  // Array of { url?, data?, mimeType?, alt? }
     } = body;
     
     // Validate required fields
@@ -48,6 +49,38 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // Validate images if provided
+    let validatedImages: any[] = [];
+    if (images && Array.isArray(images)) {
+      if (images.length > 5) {
+        return NextResponse.json(
+          { error: 'Maximum 5 images allowed per job' },
+          { status: 400 }
+        );
+      }
+      
+      for (const img of images) {
+        if (!img.url && !img.data) {
+          continue; // Skip invalid images
+        }
+        
+        // Validate base64 size (roughly 2MB limit)
+        if (img.data && img.data.length > 2800000) {
+          return NextResponse.json(
+            { error: 'Image too large. Maximum size is ~2MB per image.' },
+            { status: 400 }
+          );
+        }
+        
+        validatedImages.push({
+          url: img.url,
+          data: img.data,
+          mimeType: img.mimeType || 'image/jpeg',
+          alt: img.alt || ''
+        });
+      }
+    }
+    
     const job = await Job.create({
       agentId: agent._id.toString(),
       title,
@@ -59,6 +92,7 @@ export async function POST(request: NextRequest) {
       deadline: deadline ? new Date(deadline) : undefined,
       category: category || 'other',
       tags: tags || [],
+      images: validatedImages,
     });
     
     // Update agent's job count

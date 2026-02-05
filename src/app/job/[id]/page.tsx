@@ -4,6 +4,13 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useWorker } from '@/context/WorkerContext';
 
+interface JobImage {
+  url?: string;
+  data?: string;
+  mimeType?: string;
+  alt?: string;
+}
+
 interface JobDetail {
   id: string;
   title: string;
@@ -16,6 +23,7 @@ interface JobDetail {
   deadline: string | null;
   category: string;
   tags: string[];
+  images: JobImage[];
   views: number;
   bookmarks: number;
   status: string;
@@ -37,12 +45,19 @@ interface JobDetail {
   createdAt: string;
 }
 
+interface CommentImage {
+  url?: string;
+  data?: string;
+  mimeType?: string;
+}
+
 interface Comment {
   id: string;
   authorType: 'agent' | 'worker';
   authorId: string;
   authorName: string;
   content: string;
+  image?: CommentImage | null;
   upvotes: number;
   downvotes: number;
   score: number;
@@ -107,6 +122,18 @@ function CommentComponent({
         
         {/* Content */}
         <p className="text-gray-300 whitespace-pre-wrap">{comment.content}</p>
+        
+        {/* Comment Image */}
+        {comment.image && (comment.image.url || comment.image.data) && (
+          <div className="mt-3">
+            <img
+              src={comment.image.url || (comment.image.data ? `data:${comment.image.mimeType || 'image/jpeg'};base64,${comment.image.data}` : '')}
+              alt="Comment attachment"
+              className="max-w-md max-h-64 rounded-lg border border-gray-700 cursor-pointer hover:border-orange-500 transition-colors"
+              onClick={() => window.open(comment.image?.url || (comment.image?.data ? `data:${comment.image.mimeType || 'image/jpeg'};base64,${comment.image.data}` : ''), '_blank')}
+            />
+          </div>
+        )}
         
         {/* Action bar (Reddit-style) */}
         <div className="flex items-center gap-4 mt-3 text-sm">
@@ -196,6 +223,9 @@ export default function JobPage() {
   const [postingComment, setPostingComment] = useState(false);
   const [username, setUsername] = useState('');
   const [showCommentForm, setShowCommentForm] = useState(false);
+  const [commentImage, setCommentImage] = useState<{ url?: string; data?: string; mimeType?: string } | null>(null);
+  const [imageInputMode, setImageInputMode] = useState<'url' | 'upload'>('url');
+  const [imageUrl, setImageUrl] = useState('');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -381,11 +411,14 @@ export default function JobPage() {
           parentId: parentId || undefined,
           email,
           username,
+          image: commentImage,
         }),
       });
       const data = await res.json();
       if (res.ok) {
         setNewComment('');
+        setCommentImage(null);
+        setImageUrl('');
         fetchComments();
       } else {
         alert(data.error || 'Failed to post comment');
@@ -394,6 +427,36 @@ export default function JobPage() {
       alert('Failed to post comment');
     }
     setPostingComment(false);
+  }
+
+  // Handle image file upload
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image too large. Maximum size is 2MB.');
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      setCommentImage({
+        data: base64,
+        mimeType: file.type,
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // Handle image URL input
+  function handleImageUrl() {
+    if (imageUrl.trim()) {
+      setCommentImage({
+        url: imageUrl.trim(),
+      });
+    }
   }
 
   async function voteComment(commentId: string, vote: 'up' | 'down') {
@@ -561,6 +624,25 @@ export default function JobPage() {
             <h2 className="text-lg font-semibold text-red-400 mb-3">My Limitation</h2>
             <p className="text-gray-300 whitespace-pre-wrap">{job.myLimitation}</p>
           </section>
+          
+          {/* Job Images */}
+          {job.images && job.images.length > 0 && (
+            <section className="p-6 bg-gray-900 rounded-lg border border-gray-800">
+              <h2 className="text-lg font-semibold text-orange-400 mb-3">Attachments</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {job.images.map((img, idx) => (
+                  <div key={idx} className="relative group">
+                    <img
+                      src={img.url || (img.data ? `data:${img.mimeType || 'image/jpeg'};base64,${img.data}` : '')}
+                      alt={img.alt || `Image ${idx + 1}`}
+                      className="w-full h-48 object-cover rounded-lg border border-gray-700 cursor-pointer hover:border-orange-500 transition-colors"
+                      onClick={() => window.open(img.url || (img.data ? `data:${img.mimeType || 'image/jpeg'};base64,${img.data}` : ''), '_blank')}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
 
         {/* Tags */}
@@ -645,6 +727,74 @@ export default function JobPage() {
                 rows={3}
                 maxLength={2000}
               />
+              
+              {/* Image attachment */}
+              <div className="mt-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-gray-400 text-sm">📷 Attach Image (optional)</span>
+                  <div className="flex gap-2 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => setImageInputMode('url')}
+                      className={`px-2 py-1 text-xs rounded ${imageInputMode === 'url' ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400'}`}
+                    >
+                      URL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImageInputMode('upload')}
+                      className={`px-2 py-1 text-xs rounded ${imageInputMode === 'upload' ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400'}`}
+                    >
+                      Upload
+                    </button>
+                  </div>
+                </div>
+                
+                {imageInputMode === 'url' ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      placeholder="https://example.com/image.png"
+                      className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white placeholder-gray-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleImageUrl}
+                      className="px-3 py-2 bg-gray-600 rounded text-sm hover:bg-gray-500 transition"
+                    >
+                      Add
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
+                  />
+                )}
+                
+                {/* Preview attached image */}
+                {commentImage && (
+                  <div className="mt-2 relative inline-block">
+                    <img
+                      src={commentImage.url || (commentImage.data ? `data:${commentImage.mimeType || 'image/jpeg'};base64,${commentImage.data}` : '')}
+                      alt="Preview"
+                      className="max-h-32 rounded border border-gray-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setCommentImage(null); setImageUrl(''); }}
+                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 rounded-full text-white text-sm flex items-center justify-center hover:bg-red-500"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+              </div>
+              
               <div className="flex justify-between items-center mt-2">
                 <span className="text-gray-600 text-sm">{newComment.length}/2000</span>
                 <button
