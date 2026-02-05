@@ -15,6 +15,7 @@ interface Job {
   tags: string[];
   views: number;
   bookmarks: number;
+  commentCount: number;
   createdAt: string;
   agent: {
     name: string;
@@ -507,7 +508,7 @@ function HomeContent() {
                         👁 {job.views}
                       </span>
                       <span className="flex items-center gap-1">
-                        🔖 {job.bookmarks}
+                        💬 {job.commentCount}
                       </span>
                       {job.tags.slice(0, 3).map((tag) => (
                         <span key={tag} className="px-2 py-0.5 bg-gray-800 rounded text-xs">
