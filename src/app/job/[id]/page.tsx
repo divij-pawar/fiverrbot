@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useWorker } from '@/context/WorkerContext';
 
 interface JobDetail {
   id: string;
@@ -37,22 +36,165 @@ interface JobDetail {
   createdAt: string;
 }
 
+interface Comment {
+  id: string;
+  authorType: 'agent' | 'worker';
+  authorId: string;
+  authorName: string;
+  content: string;
+  upvotes: number;
+  downvotes: number;
+  score: number;
+  createdAt: string;
+  replies: Comment[];
+}
+
+function AuthorBadge({ type, name }: { type: 'agent' | 'worker'; name: string }) {
+  if (type === 'agent') {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className="text-orange-400 font-medium">{name}</span>
+        <span className="text-orange-500" title="AI Agent">🦞</span>
+      </span>
+    );
+  }
+  return (
+    <span className="text-blue-400 font-medium">{name}</span>
+  );
+}
+
+function CommentComponent({ 
+  comment, 
+  jobId,
+  onVote,
+  onReply,
+  depth = 0 
+}: { 
+  comment: Comment; 
+  jobId: string;
+  onVote: (commentId: string, vote: 'up' | 'down') => void;
+  onReply: (parentId: string, content: string) => void;
+  depth?: number;
+}) {
+  const [showReply, setShowReply] = useState(false);
+  const [replyContent, setReplyContent] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleReply = async () => {
+    if (!replyContent.trim()) return;
+    setSubmitting(true);
+    await onReply(comment.id, replyContent);
+    setReplyContent('');
+    setShowReply(false);
+    setSubmitting(false);
+  };
+
+  return (
+    <div className={`${depth > 0 ? 'ml-6 border-l-2 border-gray-800 pl-4' : ''}`}>
+      <div className="bg-gray-900/50 rounded-lg p-4 mb-2">
+        {/* Header */}
+        <div className="flex items-center gap-2 mb-2">
+          <AuthorBadge type={comment.authorType} name={comment.authorName} />
+          <span className="text-gray-600 text-sm">
+            {new Date(comment.createdAt).toLocaleDateString()}
+          </span>
+        </div>
+        
+        {/* Content */}
+        <p className="text-gray-300 whitespace-pre-wrap">{comment.content}</p>
+        
+        {/* Action bar (Reddit-style) */}
+        <div className="flex items-center gap-4 mt-3 text-sm">
+          {/* Vote buttons */}
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={() => onVote(comment.id, 'up')}
+              className="text-gray-500 hover:text-green-400 transition p-1"
+            >
+              ▲
+            </button>
+            <span className={`font-medium min-w-[20px] text-center ${
+              comment.score > 0 ? 'text-green-400' : 
+              comment.score < 0 ? 'text-red-400' : 'text-gray-500'
+            }`}>
+              {comment.score}
+            </span>
+            <button 
+              onClick={() => onVote(comment.id, 'down')}
+              className="text-gray-500 hover:text-red-400 transition p-1"
+            >
+              ▼
+            </button>
+          </div>
+          
+          {/* Reply button */}
+          {depth < 2 && (
+            <button
+              onClick={() => setShowReply(!showReply)}
+              className="text-gray-500 hover:text-gray-300 transition"
+            >
+              {showReply ? 'Cancel' : 'Reply'}
+            </button>
+          )}
+        </div>
+        
+        {/* Reply form */}
+        {showReply && (
+          <div className="mt-3">
+            <textarea
+              value={replyContent}
+              onChange={(e) => setReplyContent(e.target.value)}
+              placeholder="Write a reply..."
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white placeholder-gray-500 resize-none"
+              rows={2}
+              maxLength={2000}
+            />
+            <button
+              onClick={handleReply}
+              disabled={submitting || !replyContent.trim()}
+              className="mt-2 px-4 py-2 bg-orange-600 rounded-lg text-sm font-medium hover:bg-orange-500 disabled:opacity-50 transition"
+            >
+              {submitting ? 'Posting...' : 'Post Reply'}
+            </button>
+          </div>
+        )}
+      </div>
+      
+      {/* Replies */}
+      {comment.replies && comment.replies.length > 0 && (
+        <div className="mt-2">
+          {comment.replies.map((reply) => (
+            <CommentComponent
+              key={reply.id}
+              comment={reply}
+              jobId={jobId}
+              onVote={onVote}
+              onReply={onReply}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function JobPage() {
   const params = useParams();
   const router = useRouter();
-  const { email, setEmail, isAuthenticated } = useWorker();
   const [job, setJob] = useState<JobDetail | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [postingComment, setPostingComment] = useState(false);
+  const [authToken, setAuthToken] = useState('');
+  const [showCommentForm, setShowCommentForm] = useState(false);
 
   useEffect(() => {
     if (params.id) {
       fetchJob();
+      fetchComments();
     }
   }, [params.id]);
 
@@ -70,22 +212,36 @@ export default function JobPage() {
     setLoading(false);
   }
 
-  async function acceptJob(workerEmail?: string) {
+  async function fetchComments() {
+    try {
+      const res = await fetch(`/api/job/${params.id}/comments`);
+      if (res.ok) {
+        const data = await res.json();
+        setComments(data.comments || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch comments:', error);
+    }
+  }
+
+  async function acceptJob() {
+    const token = prompt('Enter your worker email (from registration):');
+    if (!token) return;
+
     setAccepting(true);
     try {
-      const headers: Record<string,string> = { 'Content-Type': 'application/json' };
-      if (workerEmail) headers['Authorization'] = `Bearer ${workerEmail}`;
       const res = await fetch('/api/worker/accept', {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({ jobId: params.id }),
       });
       const data = await res.json();
       if (res.ok) {
-        if (workerEmail) setEmail(workerEmail);
-        setShowAuthModal(false);
-        await fetchJob();
-        router.push(`/work/${params.id}`);
+        alert('Job accepted! Check your dashboard to submit work.');
+        fetchJob();
       } else {
         alert(data.error || 'Failed to accept job');
       }
@@ -95,48 +251,60 @@ export default function JobPage() {
     setAccepting(false);
   }
 
-  const handleAcceptClick = () => {
-    if (isAuthenticated) {
-      // Already logged in, accept directly (server will read cookie)
-      acceptJob();
-    } else {
-      // Show auth modal
-      setAuthError('');
-      setShowAuthModal(true);
-    }
-  }
-
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    if (!authEmail.trim() || !authPassword) {
-      setAuthError('Email and password are required');
+  async function postComment(parentId?: string, content?: string) {
+    const commentContent = content || newComment;
+    if (!commentContent.trim()) return;
+    if (!authToken) {
+      alert('Please enter your email first');
       return;
     }
 
-    setAuthLoading(true);
+    setPostingComment(true);
     try {
-      const res = await fetch('/api/worker/login', {
+      const res = await fetch(`/api/job/${params.id}/comments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: authEmail, password: authPassword }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ 
+          content: commentContent,
+          parentId: parentId || undefined,
+        }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setAuthError(data.error || 'Login failed');
-        return;
+      const data = await res.json();
+      if (res.ok) {
+        setNewComment('');
+        fetchComments();
+      } else {
+        alert(data.error || 'Failed to post comment');
       }
+    } catch (error) {
+      alert('Failed to post comment');
+    }
+    setPostingComment(false);
+  }
 
-      // login successful — set context email and accept using cookie-based auth
-      setEmail(authEmail);
-      setShowAuthModal(false);
-      setAuthEmail('');
-      setAuthPassword('');
-      await acceptJob();
-    } catch (err) {
-      setAuthError('Network error');
-    } finally {
-      setAuthLoading(false);
+  async function voteComment(commentId: string, vote: 'up' | 'down') {
+    if (!authToken) {
+      alert('Please enter your email to vote');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/comment/${commentId}/vote`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ vote }),
+      });
+      if (res.ok) {
+        fetchComments();
+      }
+    } catch (error) {
+      console.error('Failed to vote:', error);
     }
   }
 
@@ -178,76 +346,6 @@ export default function JobPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* Auth Modal */}
-      {showAuthModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-lg border border-gray-800 max-w-sm w-full p-6">
-            <h2 className="text-2xl font-bold text-white mb-4">Sign In to Accept Job</h2>
-            <p className="text-gray-400 mb-6">
-              Enter your worker email and password to accept this job and start working on it.
-            </p>
-            
-            <form onSubmit={handleAuthSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Worker Email
-                </label>
-                <input
-                  type="email"
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
-                  required
-                  autoFocus
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                  Use the email from your worker registration
-                </p>
-              </div>
-
-              <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)}
-                  placeholder="Your password"
-                  className="w-full px-4 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition"
-                  required
-                />
-              </div>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAuthModal(false)}
-                  className="flex-1 px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={accepting || !authEmail.trim() || !authPassword}
-                  className="flex-1 px-4 py-2 bg-orange-600 rounded-lg hover:bg-orange-500 transition disabled:opacity-50 font-semibold"
-                >
-                  {accepting ? 'Accepting...' : 'Accept Job'}
-                </button>
-              </div>
-            </form>
-
-            <div className="mt-6 p-4 bg-gray-950 rounded-lg border border-gray-800">
-              <p className="text-xs text-gray-400">
-                💡 <strong>New worker?</strong> Register first on the <a href="/" className="text-orange-400 hover:text-orange-300 underline">homepage</a> to get your worker email.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <header className="border-b border-gray-800 bg-gray-900">
         <div className="max-w-4xl mx-auto px-4 py-4">
@@ -287,7 +385,10 @@ export default function JobPage() {
               🦞
             </div>
             <div>
-              <div className="font-semibold text-white">{job.agent.name}</div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-white">{job.agent.name}</span>
+                <span className="text-orange-500">🦞</span>
+              </div>
               {job.agent.personality && (
                 <div className="text-sm text-gray-400">{job.agent.personality}</div>
               )}
@@ -312,19 +413,11 @@ export default function JobPage() {
           )}
           {job.status === 'OPEN' && (
             <button
-              onClick={handleAcceptClick}
+              onClick={acceptJob}
               disabled={accepting}
               className="px-6 py-3 bg-orange-600 rounded-lg font-semibold hover:bg-orange-500 transition disabled:opacity-50"
             >
               {accepting ? 'Accepting...' : 'Accept Job'}
-            </button>
-          )}
-          {job.status === 'ASSIGNED' && isAuthenticated && (
-            <button
-              onClick={() => router.push(`/work/${params.id}`)}
-              className="px-6 py-3 bg-blue-600 rounded-lg font-semibold hover:bg-blue-500 transition"
-            >
-              Go to Workspace
             </button>
           )}
         </div>
@@ -380,6 +473,91 @@ export default function JobPage() {
             )}
           </section>
         )}
+
+        {/* Comments Section */}
+        <section className="mt-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-white">Comments & Negotiation</h2>
+            {!showCommentForm && (
+              <button
+                onClick={() => setShowCommentForm(true)}
+                className="px-4 py-2 bg-orange-600 rounded-lg font-medium hover:bg-orange-500 transition"
+              >
+                Add Comment
+              </button>
+            )}
+          </div>
+          
+          {/* Collapsible Comment Form */}
+          {showCommentForm && (
+            <div className="mb-6 p-4 bg-gray-900 rounded-lg border border-gray-800">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-gray-500 text-sm">
+                  Please don't post sensitive data (passwords, API keys, personal info)
+                </p>
+                <button
+                  onClick={() => setShowCommentForm(false)}
+                  className="text-gray-500 hover:text-white transition"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              {/* Email input */}
+              <div className="mb-3">
+                <input
+                  type="text"
+                  value={authToken}
+                  onChange={(e) => setAuthToken(e.target.value)}
+                  placeholder="Your email"
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white placeholder-gray-500"
+                />
+                <p className="text-gray-600 text-xs mt-1">
+                  AI agents comment via the API
+                </p>
+              </div>
+              
+              {/* Comment textarea */}
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Ask a question, negotiate, or discuss..."
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white placeholder-gray-500 resize-none"
+                rows={3}
+                maxLength={2000}
+              />
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-gray-600 text-sm">{newComment.length}/2000</span>
+                <button
+                  onClick={() => postComment()}
+                  disabled={postingComment || !newComment.trim() || !authToken}
+                  className="px-6 py-2 bg-orange-600 rounded-lg font-medium hover:bg-orange-500 disabled:opacity-50 transition"
+                >
+                  {postingComment ? 'Posting...' : 'Post Comment'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Comments List */}
+          <div className="space-y-4">
+            {comments.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No comments yet. Be the first to start a conversation!
+              </div>
+            ) : (
+              comments.map((comment) => (
+                <CommentComponent
+                  key={comment.id}
+                  comment={comment}
+                  jobId={job.id}
+                  onVote={voteComment}
+                  onReply={(parentId, content) => postComment(parentId, content)}
+                />
+              ))
+            )}
+          </div>
+        </section>
 
         {/* Footer */}
         <div className="mt-8 text-center text-gray-500 text-sm">
