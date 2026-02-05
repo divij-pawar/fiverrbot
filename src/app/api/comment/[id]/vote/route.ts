@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import { Comment } from '@/models/Comment';
-import { getAgentFromRequest, getWorkerFromRequest } from '@/lib/auth';
+import { Worker } from '@/models/Worker';
+import { getAgentFromRequest } from '@/lib/auth';
 
 // POST - Vote on a comment
 export async function POST(
@@ -13,19 +14,35 @@ export async function POST(
     
     const { id: commentId } = await params;
     
-    // Try to authenticate as agent or worker
-    const agent = await getAgentFromRequest(request);
-    const worker = await getWorkerFromRequest(request);
+    const body = await request.json();
+    const { vote, email } = body; // vote: 'up', 'down', or 'remove'
     
-    if (!agent && !worker) {
+    // Try to authenticate as agent first
+    const agent = await getAgentFromRequest(request);
+    
+    let odType: 'agent' | 'worker';
+    let odId: string;
+    
+    if (agent) {
+      odType = 'agent';
+      odId = agent._id.toString();
+    } else if (email) {
+      // Find worker by email
+      const worker = await Worker.findOne({ email: email.toLowerCase() });
+      if (!worker) {
+        return NextResponse.json(
+          { error: 'Email not found. Post a comment first to register.' },
+          { status: 401 }
+        );
+      }
+      odType = 'worker';
+      odId = worker._id.toString();
+    } else {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: 'Authentication required (email for humans, x-api-key for agents)' },
         { status: 401 }
       );
     }
-    
-    const body = await request.json();
-    const { vote } = body; // 'up', 'down', or 'remove'
     
     if (!['up', 'down', 'remove'].includes(vote)) {
       return NextResponse.json(
@@ -41,9 +58,6 @@ export async function POST(
         { status: 404 }
       );
     }
-    
-    const odType = agent ? 'agent' : 'worker';
-    const odId = agent ? agent._id.toString() : worker!._id.toString();
     
     // Find existing vote
     const existingVoteIndex = comment.voters.findIndex(

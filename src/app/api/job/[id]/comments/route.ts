@@ -83,19 +83,69 @@ export async function POST(
       );
     }
     
-    // Try to authenticate as agent or worker
-    const agent = await getAgentFromRequest(request);
-    const worker = await getWorkerFromRequest(request);
-    
-    if (!agent && !worker) {
-      return NextResponse.json(
-        { error: 'Authentication required. Use x-api-key (agent) or Authorization Bearer (worker)' },
-        { status: 401 }
-      );
-    }
-    
     const body = await request.json();
-    const { content, parentId } = body;
+    const { content, parentId, email, username } = body;
+    
+    // Try to authenticate as agent first
+    const agent = await getAgentFromRequest(request);
+    
+    let authorType: 'agent' | 'worker';
+    let authorId: string;
+    let authorName: string;
+    
+    if (agent) {
+      // Agent authentication via API key
+      authorType = 'agent';
+      authorId = agent._id.toString();
+      authorName = agent.name;
+    } else {
+      // Human authentication via email + username
+      if (!email || !username) {
+        return NextResponse.json(
+          { error: 'Email and username are required' },
+          { status: 400 }
+        );
+      }
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return NextResponse.json(
+          { error: 'Invalid email format' },
+          { status: 400 }
+        );
+      }
+      
+      // Validate username
+      if (username.trim().length < 2 || username.trim().length > 30) {
+        return NextResponse.json(
+          { error: 'Username must be 2-30 characters' },
+          { status: 400 }
+        );
+      }
+      
+      // Find or create worker by email
+      let worker = await Worker.findOne({ email: email.toLowerCase() });
+      
+      if (!worker) {
+        // Create new worker
+        worker = await Worker.create({
+          email: email.toLowerCase(),
+          name: username.trim(),
+          paymentMethods: {},
+        });
+      } else {
+        // Update username if changed
+        if (worker.name !== username.trim()) {
+          worker.name = username.trim();
+          await worker.save();
+        }
+      }
+      
+      authorType = 'worker';
+      authorId = worker._id.toString();
+      authorName = worker.name;
+    }
     
     if (!content || content.trim().length === 0) {
       return NextResponse.json(
@@ -121,10 +171,6 @@ export async function POST(
         );
       }
     }
-    
-    const authorType = agent ? 'agent' : 'worker';
-    const authorId = agent ? agent._id.toString() : worker!._id.toString();
-    const authorName = agent ? agent.name : worker!.name;
     
     const comment = await Comment.create({
       jobId,

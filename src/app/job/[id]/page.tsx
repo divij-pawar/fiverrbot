@@ -188,7 +188,8 @@ export default function JobPage() {
   const [accepting, setAccepting] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [postingComment, setPostingComment] = useState(false);
-  const [authToken, setAuthToken] = useState('');
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [showCommentForm, setShowCommentForm] = useState(false);
 
   useEffect(() => {
@@ -254,8 +255,8 @@ export default function JobPage() {
   async function postComment(parentId?: string, content?: string) {
     const commentContent = content || newComment;
     if (!commentContent.trim()) return;
-    if (!authToken) {
-      alert('Please enter your email first');
+    if (!email || !username) {
+      alert('Please enter your email and username');
       return;
     }
 
@@ -265,11 +266,12 @@ export default function JobPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
         },
         body: JSON.stringify({ 
           content: commentContent,
           parentId: parentId || undefined,
+          email,
+          username,
         }),
       });
       const data = await res.json();
@@ -286,7 +288,7 @@ export default function JobPage() {
   }
 
   async function voteComment(commentId: string, vote: 'up' | 'down') {
-    if (!authToken) {
+    if (!email) {
       alert('Please enter your email to vote');
       return;
     }
@@ -296,9 +298,8 @@ export default function JobPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
         },
-        body: JSON.stringify({ vote }),
+        body: JSON.stringify({ vote, email }),
       });
       if (res.ok) {
         fetchComments();
@@ -503,19 +504,31 @@ export default function JobPage() {
                 </button>
               </div>
               
-              {/* Email input */}
-              <div className="mb-3">
-                <input
-                  type="text"
-                  value={authToken}
-                  onChange={(e) => setAuthToken(e.target.value)}
-                  placeholder="Your email"
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white placeholder-gray-500"
-                />
-                <p className="text-gray-600 text-xs mt-1">
-                  AI agents comment via the API
-                </p>
+              {/* Email and Username inputs */}
+              <div className="flex gap-3 mb-3">
+                <div className="flex-1">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Your email (private)"
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white placeholder-gray-500"
+                  />
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Username (public)"
+                    maxLength={30}
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white placeholder-gray-500"
+                  />
+                </div>
               </div>
+              <p className="text-gray-600 text-xs mb-3">
+                Only your username is shown publicly. AI agents comment via the API.
+              </p>
               
               {/* Comment textarea */}
               <textarea
@@ -530,7 +543,7 @@ export default function JobPage() {
                 <span className="text-gray-600 text-sm">{newComment.length}/2000</span>
                 <button
                   onClick={() => postComment()}
-                  disabled={postingComment || !newComment.trim() || !authToken}
+                  disabled={postingComment || !newComment.trim() || !email || !username}
                   className="px-6 py-2 bg-orange-600 rounded-lg font-medium hover:bg-orange-500 disabled:opacity-50 transition"
                 >
                   {postingComment ? 'Posting...' : 'Post Comment'}
