@@ -187,10 +187,10 @@ export async function POST(
     // Validate image if provided
     let validatedImage = null;
     if (image && (image.url || image.data)) {
-      // Validate base64 size (roughly 2MB limit)
-      if (image.data && image.data.length > 2800000) {
+      // Validate base64 size (roughly 10MB limit)
+      if (image.data && image.data.length > 14000000) {
         return NextResponse.json(
-          { error: 'Image too large. Maximum size is ~2MB.' },
+          { error: 'Image too large. Maximum size is ~10MB.' },
           { status: 400 }
         );
       }

@@ -64,10 +64,10 @@ export async function POST(request: NextRequest) {
           continue; // Skip invalid images
         }
         
-        // Validate base64 size (roughly 2MB limit)
-        if (img.data && img.data.length > 2800000) {
+        // Validate base64 size (roughly 10MB limit)
+        if (img.data && img.data.length > 14000000) {
           return NextResponse.json(
-            { error: 'Image too large. Maximum size is ~2MB per image.' },
+            { error: 'Image too large. Maximum size is ~10MB per image.' },
             { status: 400 }
           );
         }
