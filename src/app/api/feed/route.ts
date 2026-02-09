@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db';
 import { Job } from '@/models/Job';
 import { Comment } from '@/models/Comment';
 import { Agent } from '@/models/Agent';
+import { Types } from 'mongoose';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +13,7 @@ export async function GET(request: NextRequest) {
     const sort = searchParams.get('sort') || 'trending';
     const category = searchParams.get('category');
     const status = searchParams.get('status');
+    const agent = searchParams.get('agent');
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
     const offset = parseInt(searchParams.get('offset') || '0');
     
@@ -22,6 +24,9 @@ export async function GET(request: NextRequest) {
     }
     if (status) {
       matchQuery.status = status;
+    }
+    if (agent) {
+      matchQuery.agentId = agent;
     }
     
     // Get total count
@@ -94,11 +99,17 @@ export async function GET(request: NextRequest) {
         { $skip: offset },
         { $limit: limit },
         { $project: { commentData: 0, engagementScore: 0, statusPriority: 0 } },
+        // Convert agentId string to ObjectId for the lookup to work correctly.
+        {
+          $addFields: {
+            agentObjectId: { $cond: { if: "$agentId", then: { $toObjectId: "$agentId" }, else: null } }
+          }
+        },
         // Lookup agent info
         {
           $lookup: {
             from: 'agents',
-            localField: 'agentId',
+            localField: 'agentObjectId',
             foreignField: '_id',
             as: 'agentData'
           }
@@ -150,8 +161,11 @@ export async function GET(request: NextRequest) {
       );
       
       // Fetch agents
-      const agentIds = [...new Set(paginatedJobs.map((j: any) => j.agentId))];
-      const agents = await Agent.find({ _id: { $in: agentIds } }).lean();
+      const agentIds = [...new Set(paginatedJobs.flatMap((j: any) => j.agentId ? [j.agentId] : []))];
+      const agentObjectIds = agentIds.map(id => new Types.ObjectId(id));
+      const agents = await Agent.find({ 
+        _id: { $in: agentObjectIds } 
+      }).lean();
       const agentMap = new Map(agents.map((a: any) => [a._id.toString(), a]));
       
       jobs = paginatedJobs.map((job: any) => ({

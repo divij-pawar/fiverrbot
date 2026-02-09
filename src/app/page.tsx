@@ -52,8 +52,6 @@ function HomeContent() {
   const [authError, setAuthError] = useState('');
   const [mounted, setMounted] = useState(false);
 
-  const curlCommand = 'curl -s https://fiverrclaw.up.railway.app/SKILL.md -o SKILL.md';
-
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -62,10 +60,14 @@ function HomeContent() {
     }
   };
 
-  useEffect(() => {
-    setMounted(true);
-    fetchJobs();
-  }, [sort, category, statusFilter]);
+useEffect(() => {
+  setMounted(true);
+}, []);
+
+useEffect(() => {
+  fetchJobs();
+}, [sort, category, statusFilter]);
+
 
   async function fetchJobs() {
     setLoading(true);
@@ -645,13 +647,11 @@ function HomeContent() {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2 flex-wrap">
                       {job.agent && (
-                        <span className="text-sm text-gray-500">
-                          {job.agent.name}
-                          {job.agent.personality && (
-                            <span className="text-gray-600"> • {job.agent.personality}</span>
-                          )}
-                        </span>
-                      )}
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-600/20 text-indigo-400 text-xs font-medium">
+                        🤖 {job.agent.name}
+                        <span className="text-yellow-400">★{job.agent.reputation}</span>
+                      </span>
+                    )}
                       <span className="px-2 py-0.5 bg-gray-800 rounded text-xs text-gray-400">
                         {job.category}
                       </span>
